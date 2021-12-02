@@ -1,0 +1,143 @@
+import numpy as np
+from collections import deque
+import gym
+from gym import spaces
+#from PIL import Image
+import cv2
+
+class RepeatAction(gym.Wrapper):
+    """
+        Repeat each action 'repeat' times
+        Args:
+            repeat: How many action repetitions?
+            fire_first:
+    """
+    def __init__(self, env, repeat=4, fire_first=False):
+        super(RepeatAction, self).__init__(env)
+        self.repeat = repeat
+        self.shape = env.observation_space.low.shape
+        self.fire_first = fire_first
+
+    def step(self, action):
+        total_reward = 0.0
+        done = False
+        for i in range(self.repeat):
+            obs, reward, done, info = self.env.step(action)
+            total_reward += reward
+            if done:
+                break
+        return obs, total_reward, done, info
+
+    def reset(self):
+        obs = self.env.reset()
+        if self.fire_first:
+            assert self.env.unwrapped.get_action_meanings()[1] == 'FIRE'
+            obs, _, _, _ = self.env_step(1)
+        return obs
+
+
+class RepeatActionAndMaxFrame(gym.Wrapper):
+    """ modified from:
+        https://github.com/PacktPublishing/Deep-Reinforcement-Learning-Hands-On/blob/master/Chapter06/lib/wrappers.py
+    """
+    def __init__(self, env=None, repeat=4, clip_reward=False,
+                 no_ops=0, fire_first=False):
+        super(RepeatActionAndMaxFrame, self).__init__(env)
+        self.repeat = repeat
+        self.shape = env.observation_space.low.shape
+        self.frame_buffer = np.zeros_like((2,self.shape))
+        self.clip_reward = clip_reward
+        self.no_ops = 0
+        self.fire_first = fire_first
+
+    def step(self, action):
+        t_reward = 0.0
+        done = False
+        for i in range(self.repeat):
+            obs, reward, done, info = self.env.step(action)
+            if self.clip_reward:
+                reward = np.clip(np.array([reward]), -1, 1)[0]
+            t_reward += reward
+            idx = i % 2
+            self.frame_buffer[idx] = obs
+            if done:
+                break
+
+        max_frame = np.maximum(self.frame_buffer[0], self.frame_buffer[1])
+        return max_frame, t_reward, done, info
+
+    def reset(self):
+        obs = self.env.reset()
+        no_ops = np.random.randint(self.no_ops)+1 if self.no_ops > 0 else 0
+        for _ in range(no_ops):
+            _, _, done, _ = self.env.step(0)
+            if done:
+                self.env.reset()
+
+        if self.fire_first:
+            assert self.env.unwrapped.get_action_meanings()[1] == 'FIRE'
+            obs, _, _, _ = self.env.step(1)
+
+        self.frame_buffer = np.zeros_like((2,self.shape))
+        self.frame_buffer[0] = obs
+        return obs
+    
+class PreprocessFrame(gym.ObservationWrapper):
+    def __init__(self, shape, env=None):
+        super(PreprocessFrame, self).__init__(env)
+        self.shape=(shape[2], shape[0], shape[1])
+        self.observation_space = gym.spaces.Box(low=0, high=1.0,
+                                              shape=self.shape,dtype=np.float32)
+    def observation(self, obs):
+        new_frame = cv2.cvtColor(obs, cv2.COLOR_RGB2GRAY)
+        resized_screen = cv2.resize(new_frame, self.shape[1:],
+                                    interpolation=cv2.INTER_AREA)
+        new_obs = np.array(resized_screen, dtype=np.uint8).reshape(self.shape)
+        new_obs = new_obs / 255.0
+        return new_obs
+
+class StackFrames(gym.ObservationWrapper):
+    def __init__(self, env, repeat):
+        super(StackFrames, self).__init__(env)
+        self.observation_space = gym.spaces.Box(
+            env.observation_space.low.repeat(repeat, axis=0),
+            env.observation_space.high.repeat(repeat, axis=0),
+            dtype=np.float32)
+        self.stack = deque(maxlen=repeat)
+
+    def reset(self):
+        self.stack.clear()
+        observation = self.env.reset()
+        for _ in range(self.stack.maxlen):
+            self.stack.append(observation)
+
+        return np.array(self.stack).reshape(self.observation_space.low.shape)
+
+    def observation(self, observation):
+        self.stack.append(observation)
+        return np.array(self.stack).reshape(self.observation_space.low.shape)
+
+
+def make_env(env_name=None, shape=(42, 42, 1), repeat=4, clip_rewards=False, 
+             no_ops=0, fire_first=False):
+    env = gym.make(env_name)
+    env = RepeatActionAndMaxFrame(env, repeat, clip_rewards, no_ops, fire_first)
+    env = PreprocessFrame(shape, env)
+    env = StackFrames(env, repeat)
+
+    return env
+
+
+if __name__=="__main__":
+    env = gym.make('SeaquestNoFrameskip-v4')
+    obs = env.reset()
+    
+    env2 = make_env('SeaquestNoFrameskip-v4')
+    obs2 = env2.reset()
+    
+    print(obs2.shape)
+
+    cv2.imshow('image', obs)
+    cv2.waitKey(0)
+    cv2.imshow('image', obs2[0])
+    cv2.waitKey(0)

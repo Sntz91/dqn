@@ -1,0 +1,38 @@
+{
+    "config_vanilla_with_target_rescale":
+        {
+            "name": "vanilla-with-target-rescale",
+            "hp_replay_memory_capacity": 1000000, 
+            "hp_gamma": 0.99,
+            "hp_epsilon_start": 1.0,
+            "hp_epsilon_end": 0.01,
+            "hp_epsilon_decay_last_frame": 1e6,
+            "hp_learning_rate": 0.00001,
+            "hp_replay_memory_start_after": 50000,
+            "hp_batch_size":32,
+            "hp_target_update_after": 40000,
+            "nr_of_total_frames":  200e6,
+            "hp_update_frequency": 4,
+            "hp_rescale_q_target": 1,
+            "hp_dueling": 1
+        },
+    "config_vanilla_without_target_rescale":
+        {
+            "name": "vanilla-without-target-rescale",
+            "hp_replay_memory_capacity": 1000000, 
+            "hp_gamma": 0.99,
+            "hp_epsilon_start": 1.0,
+            "hp_epsilon_end": 0.01,
+            "hp_epsilon_decay_last_frame": 1e6,
+            "hp_learning_rate": 0.00001,
+            "hp_replay_memory_start_after": 50000,
+            "hp_batch_size":32,
+            "hp_target_update_after": 40000,
+            "nr_of_total_frames":  200e6,
+            "hp_update_frequency": 4,
+            "hp_rescale_q_target": 0,
+            "hp_dueling": 1
+        }
+    
+}
+
